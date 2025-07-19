@@ -1,0 +1,163 @@
+import random
+import time
+import numpy as np
+from typing import List, Any, Optional
+from collections import defaultdict
+
+# Part 1: Randomized Quicksort Implementation
+def randomized_quicksort(arr: List[int], low: int, high: int) -> None:
+    def partition(low: int, high: int) -> int:
+        # Randomly select pivot and swap with end element
+        pivot_idx = random.randint(low, high)
+        arr[pivot_idx], arr[high] = arr[high], arr[pivot_idx]
+        pivot = arr[high]
+        i = low - 1
+        for j in range(low, high):
+            if arr[j] <= pivot:
+                i += 1
+                arr[i], arr[j] = arr[j], arr[i]
+        arr[i + 1], arr[high] = arr[high], arr[i + 1]
+        return i + 1
+
+    if low < high:
+        pi = partition(low, high)
+        randomized_quicksort(arr, low, pi - 1)
+        randomized_quicksort(arr, pi + 1, high)
+
+def deterministic_quicksort(arr: List[int], low: int, high: int) -> None:
+    def partition(low: int, high: int) -> int:
+        pivot = arr[low]  # First element as pivot
+        i = low
+        for j in range(low + 1, high + 1):
+            if arr[j] <= pivot:
+                i += 1
+                arr[i], arr[j] = arr[j], arr[i]
+        arr[low], arr[i] = arr[i], arr[low]
+        return i
+
+    if low < high:
+        pi = partition(low, high)
+        deterministic_quicksort(arr, low, pi - 1)
+        deterministic_quicksort(arr, pi + 1, high)
+
+# Part 2: Hash Table with Chaining Implementation
+class HashTable:
+    def __init__(self, size: int = 16):
+        self.size = size
+        self.table = [[] for _ in range(size)]
+        self.num_elements = 0
+        self.load_factor_threshold = 0.75
+
+    def _hash_function(self, key: Any) -> int:
+        # Universal hash function: (a * key + b) mod p mod m
+        a = random.randint(1, 1000)
+        b = random.randint(0, 1000)
+        p = 10007  # Prime number
+        return ((a * hash(key) + b) % p) % self.size
+
+    def _resize(self) -> None:
+        old_table = self.table
+        self.size *= 2
+        self.table = [[] for _ in range(self.size)]
+        self.num_elements = 0
+        for bucket in old_table:
+            for key, value in bucket:
+                self.insert(key, value)
+
+    def insert(self, key: Any, value: Any) -> None:
+        if self.num_elements / self.size >= self.load_factor_threshold:
+            self._resize()
+        index = self._hash_function(key)
+        for i, (k, _) in enumerate(self.table[index]):
+            if k == key:
+                self.table[index][i] = (key, value)
+                return
+        self.table[index].append((key, value))
+        self.num_elements += 1
+
+    def search(self, key: Any) -> Optional[Any]:
+        index = self._hash_function(key)
+        for k, v in self.table[index]:
+            if k == key:
+                return v
+        return None
+
+    def delete(self, key: Any) -> None:
+        index = self._hash_function(key)
+        for i, (k, _) in enumerate(self.table[index]):
+            if k == key:
+                self.table[index].pop(i)
+                self.num_elements -= 1
+                return
+
+# Empirical Testing
+def generate_test_arrays(n: int, distribution: str) -> List[int]:
+    if distribution == "random":
+        return [random.randint(0, 1000) for _ in range(n)]
+    elif distribution == "sorted":
+        return list(range(n))
+    elif distribution == "reverse":
+        return list(range(n - 1, -1, -1))
+    elif distribution == "repeated":
+        return [random.randint(0, 10) for _ in range(n)]
+    return []
+
+def measure_sorting_time(sort_func, arr: List[int]) -> float:
+    arr_copy = arr.copy()
+    start = time.time()
+    sort_func(arr_copy, 0, len(arr_copy) - 1)
+    return time.time() - start
+
+def measure_hash_operations(hash_table: HashTable, keys: List[int]) -> tuple:
+    insert_times, search_times, delete_times = [], [], []
+    for key in keys:
+        start = time.time()
+        hash_table.insert(key, key * 2)
+        insert_times.append(time.time() - start)
+        
+        start = time.time()
+        hash_table.search(key)
+        search_times.append(time.time() - start)
+        
+        start = time.time()
+        hash_table.delete(key)
+        delete_times.append(time.time() - start)
+    return (sum(insert_times) / len(insert_times), 
+            sum(search_times) / len(search_times), 
+            sum(delete_times) / len(delete_times))
+
+def run_tests():
+    sizes = [1000, 10000, 100000]
+    distributions = ["random", "sorted", "reverse", "repeated"]
+    results = defaultdict(list)
+    
+    # Sorting tests
+    for size in sizes:
+        for dist in distributions:
+            arr = generate_test_arrays(size, dist)
+            rand_time = measure_sorting_time(randomized_quicksort, arr)
+            det_time = measure_sorting_time(deterministic_quicksort, arr)
+            results[dist].append((size, rand_time, det_time))
+    
+    # Hash table tests
+    hash_table = HashTable()
+    hash_results = {}
+    for size in sizes:
+        keys = random.sample(range(1000000), size)
+        insert_time, search_time, delete_time = measure_hash_operations(hash_table, keys)
+        hash_results[size] = (insert_time, search_time, delete_time)
+    
+    return results, hash_results
+
+if __name__ == "__main__":
+    sorting_results, hash_results = run_tests()
+    print("Sorting Results:")
+    for dist in sorting_results:
+        print(f"\nDistribution: {dist}")
+        for size, rand_time, det_time in sorting_results[dist]:
+            print(f"Size: {size}, Randomized: {rand_time:.6f}s, Deterministic: {det_time:.6f}s")
+    
+    print("\nHash Table Results:")
+    for size in hash_results:
+        insert_time, search_time, delete_time = hash_results[size]
+        print(f"Size: {size}, Insert: {insert_time:.6f}s, Search: {search_time:.6f}s, Delete: {delete_time:.6f}s")
